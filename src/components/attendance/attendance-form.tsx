@@ -52,7 +52,15 @@ import {
   Download,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
 
 interface CellData {
   status: AttendanceStatus;
@@ -339,6 +347,31 @@ export function AttendanceForm({
       },
     }));
     setEditModal(null);
+  }
+
+  function handleModalSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editModal) return;
+    if (editModal.mode === 'present') handleMarkPresent();
+    else handleMarkAbsent();
+  }
+
+  function handleModalKeyDown(event: KeyboardEvent<HTMLFormElement>) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target instanceof HTMLButtonElement || target.closest('button')) return;
+
+    event.preventDefault();
+    const save = () => {
+      if (editModal?.mode === 'absent') handleMarkAbsent();
+      else handleMarkPresent();
+    };
+    if (target instanceof HTMLSelectElement) {
+      window.setTimeout(save, 0);
+      return;
+    }
+    save();
   }
 
   async function handleSave() {
@@ -814,7 +847,11 @@ export function AttendanceForm({
                   : 'Ishlangan soatlar'
           }
         >
-          <div className="space-y-4">
+          <form
+            className="space-y-4"
+            onSubmit={handleModalSubmit}
+            onKeyDown={handleModalKeyDown}
+          >
             {editModal.mode === 'present' ? (
               <>
                 {editIsMale ? (
@@ -823,6 +860,7 @@ export function AttendanceForm({
                       id="stavka"
                       label="Stavka"
                       required
+                      autoFocus
                       value={modalHours}
                       onChange={(e) => setModalHours(e.target.value)}
                       options={MALE_STAVKA_OPTIONS.map((value) => ({
@@ -871,6 +909,7 @@ export function AttendanceForm({
                     min={0.5}
                     max={24}
                     step={0.5}
+                    autoFocus
                     value={modalHours}
                     onChange={(e) => setModalHours(e.target.value)}
                   />
@@ -882,6 +921,7 @@ export function AttendanceForm({
                   Kelmaslik sababi
                 </label>
                 <select
+                  autoFocus
                   value={modalNotes}
                   onChange={(e) => setModalNotes(e.target.value)}
                   className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
@@ -896,6 +936,7 @@ export function AttendanceForm({
             )}
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
               <Button
+                type="button"
                 variant="secondary"
                 className="w-full sm:w-auto"
                 onClick={() => setEditModal(null)}
@@ -905,6 +946,7 @@ export function AttendanceForm({
               {editModal.mode === 'present' ? (
                 <>
                   <Button
+                    type="button"
                     variant="danger"
                     className="w-full sm:w-auto"
                     onClick={() =>
@@ -914,7 +956,7 @@ export function AttendanceForm({
                     <X className="mr-2 h-4 w-4" />
                     Ishlamadi
                   </Button>
-                  <Button className="w-full sm:w-auto" onClick={handleMarkPresent}>
+                  <Button type="submit" className="w-full sm:w-auto">
                     <Check className="mr-2 h-4 w-4" />
                     Saqlash
                   </Button>
@@ -922,6 +964,7 @@ export function AttendanceForm({
               ) : (
                 <>
                   <Button
+                    type="button"
                     variant="secondary"
                     className="w-full sm:w-auto"
                     onClick={() =>
@@ -930,18 +973,14 @@ export function AttendanceForm({
                   >
                     Orqaga
                   </Button>
-                  <Button
-                    onClick={handleMarkAbsent}
-                    variant="danger"
-                    className="w-full sm:w-auto"
-                  >
+                  <Button type="submit" variant="danger" className="w-full sm:w-auto">
                     <X className="mr-2 h-4 w-4" />
                     Saqlash
                   </Button>
                 </>
               )}
             </div>
-          </div>
+          </form>
         </Modal>
       )}
     </>

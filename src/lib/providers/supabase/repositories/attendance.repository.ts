@@ -14,24 +14,25 @@ export class SupabaseAttendanceRepository implements AttendanceRepository {
     const supabase = await createSupabaseServerClient();
     const { startDate, endDate } = getMonthDateRange(month);
 
-    const workers = await fetchAllPages<AttendanceByMonthResult['workers'][number]>((from, to) =>
-      supabase
-        .from('workers')
-        .select('*')
-        .order('id', { ascending: true })
-        .range(from, to)
-    );
-
-    const attendance = await fetchAllPages<Attendance>((from, to) =>
-      supabase
-        .from('attendance')
-        .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('worker_id', { ascending: true })
-        .order('date', { ascending: true })
-        .range(from, to)
-    );
+    const [workers, attendance] = await Promise.all([
+      fetchAllPages<AttendanceByMonthResult['workers'][number]>((from, to) =>
+        supabase
+          .from('workers')
+          .select('*')
+          .order('id', { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllPages<Attendance>((from, to) =>
+        supabase
+          .from('attendance')
+          .select('*')
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('worker_id', { ascending: true })
+          .order('date', { ascending: true })
+          .range(from, to)
+      ),
+    ]);
 
     const attendanceIds = new Set(attendance.map((row) => row.worker_id));
     const visibleWorkers = workersVisibleForMonth(

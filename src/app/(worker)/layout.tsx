@@ -3,8 +3,7 @@ import { pingActivity } from '@/lib/actions/activity';
 
 // Tabs opened before the heartbeat moved to /api/activity still call this action.
 void pingActivity;
-import { getSessionUser, signOut } from '@/lib/actions/auth';
-import { getLoginBlockReason } from '@/lib/api/access';
+import { signOut } from '@/lib/actions/auth';
 import { requirePageRole } from '@/lib/auth/require-role';
 import { USER_ROLE_LABELS } from '@/types/database';
 import { LogOut } from 'lucide-react';
@@ -16,12 +15,6 @@ export default async function WorkerLayout({
   children: React.ReactNode;
 }) {
   const profile = await requirePageRole(['worker']);
-  const session = await getSessionUser();
-  const blocked = await getLoginBlockReason(profile, session?.email);
-  if (blocked) {
-    await signOut();
-    redirect('/login');
-  }
 
   return (
     <div className="min-h-screen bg-slate-50">

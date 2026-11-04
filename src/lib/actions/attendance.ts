@@ -34,11 +34,11 @@ export async function getAttendanceByMonth(month: string): Promise<{
   editableKeys: string[] | null;
 }> {
   const profile = await requireRole(STAFF_ROLES);
-  const [data, payContext] = await Promise.all([
+  const [data, payContext, locked] = await Promise.all([
     apiGetAttendanceByMonth(month),
     getPayContext(month),
+    isMonthLocked(month),
   ]);
-  const locked = await isMonthLocked(month);
 
   if (profile.role !== 'brigadier') {
     return { ...data, scopeNote: null, locked, rates: payContext.rates, editableKeys: null };

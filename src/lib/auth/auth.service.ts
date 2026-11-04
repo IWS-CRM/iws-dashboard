@@ -1,6 +1,7 @@
 import { getAuthRepository } from '@/lib/providers';
 import { AuthResult } from '@/lib/repositories/types';
 import { Profile } from '@/types/database';
+import { cache } from 'react';
 
 /**
  * Autentifikatsiya qatlami — kelajakda Supabase Auth o'rniga
@@ -18,13 +19,13 @@ export async function signOut(): Promise<void> {
   return getAuthRepository().signOut();
 }
 
-export async function getSessionUser() {
+export const getSessionUser = cache(async () => {
   return getAuthRepository().getSessionUser();
-}
+});
 
-export async function getCurrentUser(): Promise<Profile | null> {
+export const getCurrentUser = cache(async (): Promise<Profile | null> => {
   return getAuthRepository().getCurrentProfile();
-}
+});
 
 export async function isAuthenticated(): Promise<boolean> {
   const user = await getSessionUser();

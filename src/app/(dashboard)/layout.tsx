@@ -1,6 +1,5 @@
 import { AppShell } from '@/components/layout/app-shell';
 import { getCurrentUser, getSessionUser, signOut } from '@/lib/actions/auth';
-import { getLoginBlockReason } from '@/lib/api/access';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardLayout({
@@ -52,13 +51,6 @@ export default async function DashboardLayout({
 
   if (profile.role === 'worker') {
     redirect('/my');
-  }
-
-  const session = await getSessionUser();
-  const blocked = await getLoginBlockReason(profile, session?.email);
-  if (blocked) {
-    await signOut();
-    redirect('/login');
   }
 
   return (

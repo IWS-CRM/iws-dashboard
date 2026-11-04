@@ -1,5 +1,11 @@
 import { createSupabaseAdminClient } from '@/lib/providers/supabase/admin';
-import { ActivityPing, Profile } from '@/types/database';
+import { ActivityPing, UserRole } from '@/types/database';
+
+type ActivitySubject = {
+  id: string;
+  full_name: string;
+  role: UserRole;
+};
 
 function isMissingTable(error: { message?: string; code?: string } | null) {
   if (!error) return false;
@@ -11,7 +17,7 @@ function isMissingTable(error: { message?: string; code?: string } | null) {
   );
 }
 
-export async function pingActivity(profile: Profile) {
+export async function pingActivity(profile: ActivitySubject) {
   try {
     const admin = createSupabaseAdminClient();
     const { error } = await admin.from('activity_pings').upsert(
