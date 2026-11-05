@@ -2,13 +2,16 @@
 
 import {
   addCreatorEmail,
+  addWorkerPosition,
   approveAdvance,
   confirmCreatorMfa,
   rejectAdvance,
   removeCreatorEmail,
+  removeWorkerPosition,
   restoreWorker,
   savePaySchedule,
   startCreatorMfa,
+  updateWorkerPositionPay,
 } from '@/lib/actions/governance';
 import type { getCreatorSettings } from '@/lib/actions/governance';
 import { Button } from '@/components/ui/button';
@@ -28,6 +31,7 @@ export function ControlSettings({
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [mfa, setMfa] = useState<{ secret: string; otpauth: string } | null>(null);
   const [otp, setOtp] = useState('');
@@ -37,6 +41,7 @@ export function ControlSettings({
   async function run(id: string, task: () => Promise<void>) {
     setBusy(id);
     setMessage(null);
+    setNotice(null);
     try {
       await task();
       router.refresh();
@@ -51,6 +56,9 @@ export function ControlSettings({
     <div className="space-y-6">
       {message ? (
         <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{message}</div>
+      ) : null}
+      {notice ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>
       ) : null}
 
       <Card>
@@ -140,6 +148,121 @@ export function ControlSettings({
               ))}
             </ul>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-4 p-4 sm:p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Lavozimlar</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Har bir lavozimning boshlang‘ich stavkasi bor. Stavka o‘zgarsa, shu summada turgan
+              ishchilar yangilanadi. Stavkasi boshlang‘ichdan farq qiladigan, ya’ni ko‘tarilgan
+              ishchilar o‘zgarishsiz qoladi. 12 soatlik ayollar smena narxida qoladi.
+            </p>
+          </div>
+          {!settings.positionsReady ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Lavozimlar jadvali hali yo‘q. Supabase SQL Editor’da 015_worker_positions.sql ni
+              ishga tushiring yoki npm run migrate.
+            </p>
+          ) : null}
+          {settings.positionsReady && !settings.positionPayReady ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Stavka ustuni hali yo‘q. Supabase SQL Editor’da 016_position_base_pay.sql ni ishga
+              tushiring yoki npm run migrate.
+            </p>
+          ) : null}
+          {settings.positions.length === 0 ? (
+            <p className="text-sm text-slate-500">Hali lavozim yo‘q.</p>
+          ) : (
+            <ul className="space-y-3 text-sm">
+              {settings.positions.map((position) => (
+                <li
+                  key={position.id || position.name}
+                  className="rounded-lg border border-slate-200 p-3"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                    <p className="min-w-0 flex-1 font-medium text-slate-900">{position.name}</p>
+                    <form
+                      className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-end"
+                      action={async (formData) => {
+                        setMessage(null);
+                        setNotice(null);
+                        const result = await updateWorkerPositionPay(formData);
+                        if (result.error) {
+                          setMessage(result.error);
+                          return;
+                        }
+                        setNotice(result.message || null);
+                        router.refresh();
+                      }}
+                    >
+                      <input type="hidden" name="id" value={position.id} />
+                      <div className="min-w-0 flex-1">
+                        <Input
+                          key={`${position.id}-${position.basePay ?? ''}`}
+                          name="base_pay"
+                          label="Boshlang‘ich stavka"
+                          type="number"
+                          min={1}
+                          step={1}
+                          required
+                          disabled={!settings.positionPayReady || !position.id}
+                          defaultValue={position.basePay ?? ''}
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={!settings.positionPayReady || !position.id || busy === position.id}
+                      >
+                        Saqlash
+                      </Button>
+                    </form>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={!settings.positionsReady || !position.id || busy === position.id}
+                      onClick={() => {
+                        if (!confirm(`«${position.name}» lavozimini o‘chirasizmi?`)) return;
+                        void run(position.id, () => removeWorkerPosition(position.id));
+                      }}
+                    >
+                      O‘chirish
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+            action={async (formData) => {
+              setNotice(null);
+              const result = await addWorkerPosition(formData);
+              setMessage(result.error || null);
+              if (!result.error) router.refresh();
+            }}
+          >
+            <div className="min-w-0 flex-1">
+              <Input name="name" label="Yangi lavozim" required disabled={!settings.positionsReady} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <Input
+                name="base_pay"
+                label="Boshlang‘ich stavka"
+                type="number"
+                min={1}
+                step={1}
+                required
+                disabled={!settings.positionPayReady}
+              />
+            </div>
+            <Button type="submit" disabled={!settings.positionsReady || !settings.positionPayReady}>
+              Qo‘shish
+            </Button>
+          </form>
         </CardContent>
       </Card>
 

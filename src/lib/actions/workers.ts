@@ -14,6 +14,7 @@ import {
   provisionMissingWorkerLogins as apiProvisionMissingWorkerLogins,
   resetWorkerAuthPassword,
 } from '@/lib/api/worker-login';
+import { listWorkerPositionNames, positionBasePay } from '@/lib/api/positions';
 import { recordAudit } from '@/lib/api/audit';
 import { ADMIN_ROLES, ForbiddenError, requireRole } from '@/lib/auth/require-role';
 import {
@@ -57,6 +58,7 @@ function workerActionError(err: unknown): string {
     return err.message;
   }
   const message = errorText(err);
+  if (message.includes('Lavozim')) return message;
   if (
     message.includes('gender') ||
     message.includes('shift_length') ||
@@ -67,6 +69,30 @@ function workerActionError(err: unknown): string {
     return WORKER_MIGRATION_ERROR;
   }
   return 'Xatolik yuz berdi';
+}
+
+async function applyPositionBase(
+  position: string | null,
+  gender: WorkerGender | null,
+  shiftLength: ShiftLength | null,
+  hourlyRate: number
+) {
+  if (!position || !gender || (gender === 'female' && shiftLength === 12)) return hourlyRate;
+  const base = await positionBasePay(position);
+  if (base == null) return hourlyRate;
+  const fallback = gender ? defaultHourlyRate(gender, shiftLength) : 0;
+  if (!hourlyRate || Math.abs(hourlyRate - fallback) < 1) return base;
+  return hourlyRate;
+}
+
+async function resolvePosition(position: string | null, current?: string | null) {
+  const trimmed = position?.trim() || null;
+  if (!trimmed) return null;
+  const names = await listWorkerPositionNames();
+  const match = names.find((name) => name.toLowerCase() === trimmed.toLowerCase());
+  if (match) return match;
+  if (current && current.toLowerCase() === trimmed.toLowerCase()) return current;
+  throw new Error('Lavozim ro‘yxatda yo‘q. Creator Nazorat sozlamalaridan qo‘shishi kerak.');
 }
 
 export async function getWorkers() {
@@ -100,6 +126,13 @@ export async function createWorker(formData: FormData): Promise<{ error?: string
   }
   try {
     const payload = workerPayload(formData);
+    payload.position = await resolvePosition(payload.position);
+    payload.hourly_rate = await applyPositionBase(
+      payload.position,
+      gender,
+      shift_length,
+      payload.hourly_rate
+    );
     const worker = await apiCreateWorker({
       ...payload,
       start_date:
@@ -153,6 +186,7 @@ export async function updateWorker(
   try {
     const existing = await apiGetWorkerById(id);
     const payload = workerPayload(formData);
+    payload.position = await resolvePosition(payload.position, existing?.position);
     await apiUpdateWorker(id, {
       ...payload,
       start_date: formData.get('start_date') as string,

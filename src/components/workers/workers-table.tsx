@@ -40,20 +40,33 @@ import {
 import { KeyRound, Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 
+interface PositionChoice {
+  name: string;
+  basePay: number | null;
+}
+
 interface WorkersTableProps {
   initialWorkers: Worker[];
   rates?: PayRates;
+  positions?: PositionChoice[];
 }
+
+const DEFAULT_POSITION_CHOICES: PositionChoice[] = WORKER_POSITIONS.map((name) => ({
+  name,
+  basePay: null,
+}));
 
 export function WorkersTable({
   initialWorkers,
   rates = DEFAULT_PAY_RATES,
+  positions = DEFAULT_POSITION_CHOICES,
 }: WorkersTableProps) {
   const [showModal, setShowModal] = useState(false);
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null);
   const [loading, setLoading] = useState(false);
   const [gender, setGender] = useState<WorkerGender | ''>('');
   const [shiftLength, setShiftLength] = useState<ShiftLength | ''>('');
+  const [positionName, setPositionName] = useState('');
   const [hourlyRate, setHourlyRate] = useState('');
   const [loginLoadingId, setLoginLoadingId] = useState<string | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -75,16 +88,32 @@ export function WorkersTable({
     clearFilters,
   } = useWorkerSearchFilter(initialWorkers);
 
+  function positionBase(name: string) {
+    return positions.find((item) => item.name === name)?.basePay ?? null;
+  }
+
+  function startingRate(nextGender: WorkerGender | '', nextShift: ShiftLength | '', name = positionName) {
+    const base = positionBase(name);
+    if (base != null && (nextGender === 'male' || (nextGender === 'female' && nextShift === 8))) {
+      return base;
+    }
+    if (nextGender === 'male') return defaultHourlyRate('male', null, rates);
+    if (nextGender === 'female' && nextShift) return defaultHourlyRate('female', nextShift, rates);
+    return null;
+  }
+
   function openCreate() {
     setEditingWorker(null);
     setGender('');
     setShiftLength('');
+    setPositionName('');
     setHourlyRate('');
     setShowModal(true);
   }
 
   function openEdit(worker: Worker) {
     setEditingWorker(worker);
+    setPositionName(worker.position || '');
     setGender(worker.gender ?? '');
     setShiftLength(worker.shift_length ?? '');
     setHourlyRate(
@@ -95,14 +124,13 @@ export function WorkersTable({
     setShowModal(true);
   }
 
-  function applyRate(nextGender: WorkerGender | '', nextShift: ShiftLength | '') {
-    if (nextGender === 'male') {
-      setHourlyRate(String(defaultHourlyRate('male', null, rates)));
-      return;
-    }
-    if (nextGender === 'female' && nextShift) {
-      setHourlyRate(String(defaultHourlyRate('female', nextShift, rates)));
-    }
+  function applyRate(
+    nextGender: WorkerGender | '',
+    nextShift: ShiftLength | '',
+    name = positionName
+  ) {
+    const next = startingRate(nextGender, nextShift, name);
+    if (next != null) setHourlyRate(String(next));
   }
 
   function handleGenderChange(value: string) {
@@ -273,12 +301,12 @@ export function WorkersTable({
 
   const positionOptions = [
     { value: '', label: 'Lavozimni tanlang' },
-    ...WORKER_POSITIONS.map((position) => ({
-      value: position,
-      label: position,
+    ...positions.map((position) => ({
+      value: position.name,
+      label: position.name,
     })),
     ...(editingWorker?.position &&
-    !(WORKER_POSITIONS as readonly string[]).includes(editingWorker.position)
+    !positions.some((position) => position.name === editingWorker.position)
       ? [{ value: editingWorker.position, label: editingWorker.position }]
       : []),
   ];
@@ -535,7 +563,12 @@ export function WorkersTable({
             name="position"
             label="Lavozim"
             required
-            defaultValue={editingWorker?.position || ''}
+            value={positionName}
+            onChange={(event) => {
+              const next = event.target.value;
+              setPositionName(next);
+              if (!editingWorker) applyRate(gender, shiftLength, next);
+            }}
             options={positionOptions}
           />
           <Input
@@ -590,9 +623,11 @@ export function WorkersTable({
                 required
               />
               <p className="mt-1 text-xs text-slate-500">
-                {gender === 'male'
-                  ? `1 stavka = shu summa. Davomatda 0.5, 1, 1.5 yoki 2 stavka belgilanadi. Qo'shimcha ish kuniga ${formatCurrency(rates.maleExtraWorkPay)}.`
-                  : `8 soatlik: ${formatCurrency(rates.female8hHourly)}/soat. Qo'shimcha soatlar shu stavkada.`}
+                {positionBase(positionName) != null
+                  ? `Lavozim boshlang‘ich stavkasi: ${formatCurrency(positionBase(positionName) || 0)}. Boshqacha summa kiritsangiz, lavozim stavkasi o‘zgarganda bu ishchi o‘zgarmaydi.`
+                  : gender === 'male'
+                    ? `1 stavka = shu summa. Davomatda 0.5, 1, 1.5 yoki 2 stavka belgilanadi. Qo'shimcha ish kuniga ${formatCurrency(rates.maleExtraWorkPay)}.`
+                    : `8 soatlik: ${formatCurrency(rates.female8hHourly)}/soat. Qo'shimcha soatlar shu stavkada.`}
               </p>
             </div>
           )}

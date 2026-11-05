@@ -50,12 +50,14 @@ export interface PayContext {
   rates: PayRates;
   standardMaleDaily: number[];
   standardFemale8h: number[];
+  positionRates: Record<string, number>;
 }
 
 export const DEFAULT_PAY_CONTEXT: PayContext = {
   rates: DEFAULT_PAY_RATES,
   standardMaleDaily: [MALE_DAILY_PAY],
   standardFemale8h: [FEMALE_8H_HOURLY_RATE],
+  positionRates: {},
 };
 
 export function female12hDayHourly(rates: PayRates = DEFAULT_PAY_RATES): number {

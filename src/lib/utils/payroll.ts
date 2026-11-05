@@ -21,6 +21,29 @@ function matchesStandard(value: number, standards: number[]) {
   return standards.some((standard) => Math.abs(standard - value) < 1);
 }
 
+function sameMoney(left: number, right: number) {
+  return Math.abs(left - right) < 1;
+}
+
+function positionBasePay(worker: Worker, context: PayContext) {
+  const key = worker.position?.trim().toLowerCase();
+  if (!key) return null;
+  const value = context.positionRates?.[key];
+  return value == null || !Number.isFinite(value) ? null : value;
+}
+
+function rateFromPositionOrSchedule(
+  stored: number,
+  base: number | null,
+  standards: number[],
+  scheduleRate: number
+) {
+  if (base != null) {
+    return sameMoney(stored, base) ? base : stored;
+  }
+  return matchesStandard(stored, standards) ? scheduleRate : stored;
+}
+
 export function calculatePayroll(
   workers: Worker[],
   attendance: Attendance[],
@@ -35,15 +58,22 @@ export function calculatePayroll(
     const male = isMaleWorker(worker);
     const storedMale = maleDailyRate(toNumber(worker.hourly_rate));
     const storedHourly = toNumber(worker.hourly_rate);
+    const basePay = positionBasePay(worker, context);
     const hourlyRate = male
-      ? matchesStandard(storedMale, context.standardMaleDaily)
-        ? rates.maleDailyPay
-        : storedMale
+      ? rateFromPositionOrSchedule(
+          storedMale,
+          basePay,
+          context.standardMaleDaily,
+          rates.maleDailyPay
+        )
       : isFemale12hWorker(worker)
         ? storedHourly
-        : matchesStandard(storedHourly, context.standardFemale8h)
-          ? rates.female8hHourly
-          : storedHourly;
+        : rateFromPositionOrSchedule(
+            storedHourly,
+            basePay,
+            context.standardFemale8h,
+            rates.female8hHourly
+          );
     const ratedWorker = { ...worker, hourly_rate: hourlyRate };
     const workerAttendance = attendance.filter(
       (a) => a.worker_id === worker.id && a.date.startsWith(monthPrefix)

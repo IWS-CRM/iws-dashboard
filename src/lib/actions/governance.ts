@@ -23,6 +23,12 @@ import {
 } from '@/lib/api/governance';
 import { updateAdvance as apiUpdateAdvance } from '@/lib/api/payroll';
 import { listPaySchedules, getPayContext } from '@/lib/api/pay-rates';
+import {
+  addWorkerPosition as apiAddWorkerPosition,
+  listWorkerPositions,
+  removeWorkerPosition as apiRemoveWorkerPosition,
+  updateWorkerPositionPay as apiUpdateWorkerPositionPay,
+} from '@/lib/api/positions';
 import { totpAuthUrl } from '@/lib/auth/totp';
 import { getSessionUser } from '@/lib/auth/auth.service';
 import { requireRole } from '@/lib/auth/require-role';
@@ -48,7 +54,7 @@ function revalidateWork() {
 export async function getCreatorSettings() {
   const actor = await requireRole(['creator']);
   const month = currentMonthInTashkent();
-  const [schedules, locks, requests, deletedWorkers, creators, mfa, current] =
+  const [schedules, locks, requests, deletedWorkers, creators, mfa, current, positions] =
     await Promise.all([
       listPaySchedules(),
       listMonthLocks(),
@@ -57,6 +63,7 @@ export async function getCreatorSettings() {
       listCreatorEmails(),
       getMfaState(actor.id),
       getPayContext(month),
+      listWorkerPositions(),
     ]);
   return {
     rates: current.rates,
@@ -66,6 +73,9 @@ export async function getCreatorSettings() {
     deletedWorkers,
     creators,
     mfaEnabled: mfa.enabled,
+    positions: positions.positions,
+    positionsReady: positions.ready,
+    positionPayReady: positions.payReady,
   };
 }
 
@@ -244,6 +254,70 @@ export async function restoreWorker(workerId: string) {
     summary: `${actor.full_name} ${worker.full_name} ishchisini tikladi`,
   });
   revalidateWork();
+}
+
+export async function addWorkerPosition(formData: FormData) {
+  try {
+    const actor = await requireRole(['creator']);
+    const name = await apiAddWorkerPosition(
+      String(formData.get('name') ?? ''),
+      Number(formData.get('base_pay'))
+    );
+    await recordAudit({
+      actor,
+      action: 'position.add',
+      entityType: 'position',
+      entityName: name,
+      summary: `${actor.full_name} «${name}» lavozimini qo‘shdi`,
+    });
+    revalidatePath('/control');
+    revalidatePath('/workers');
+    return {};
+  } catch (err) {
+    return { error: actionError(err) };
+  }
+}
+
+export async function updateWorkerPositionPay(formData: FormData) {
+  try {
+    const actor = await requireRole(['creator']);
+    const result = await apiUpdateWorkerPositionPay(
+      String(formData.get('id') ?? ''),
+      Number(formData.get('base_pay'))
+    );
+    await recordAudit({
+      actor,
+      action: 'position.pay',
+      entityType: 'position',
+      entityId: String(formData.get('id') ?? ''),
+      entityName: result.name,
+      summary: result.message,
+      metadata: {
+        previous: result.previous,
+        next: result.next,
+        updatedWorkers: result.updatedWorkers,
+      },
+    });
+    revalidateWork();
+    return { message: result.message };
+  } catch (err) {
+    return { error: actionError(err) };
+  }
+}
+
+export async function removeWorkerPosition(id: string) {
+  const actor = await requireRole(['creator']);
+  const name = await apiRemoveWorkerPosition(id);
+  await recordAudit({
+    actor,
+    action: 'position.remove',
+    entityType: 'position',
+    entityId: id,
+    entityName: name,
+    summary: `${actor.full_name} «${name}» lavozimini o‘chirdi`,
+  });
+  revalidatePath('/control');
+  revalidatePath('/workers');
 }
 
 export async function addCreatorEmail(formData: FormData) {

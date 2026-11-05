@@ -1,3 +1,4 @@
+import { listWorkerPositions } from '@/lib/api/positions';
 import { createSupabaseAdminClient } from '@/lib/providers/supabase/admin';
 import { isMissingSchema } from '@/lib/api/schema';
 import {
@@ -15,6 +16,20 @@ interface ScheduleRow {
   female_12h_day_pay: number;
   female_12h_night_pay: number;
   large_advance_limit: number;
+}
+
+async function loadPositionRates() {
+  try {
+    const listed = await listWorkerPositions();
+    const rates: Record<string, number> = {};
+    for (const position of listed.positions) {
+      if (position.basePay == null) continue;
+      rates[position.name.trim().toLowerCase()] = position.basePay;
+    }
+    return rates;
+  } catch {
+    return {};
+  }
 }
 
 function toRates(row: ScheduleRow): PayRates {
@@ -59,6 +74,7 @@ export async function getPayContext(month: string): Promise<PayContext> {
         DEFAULT_PAY_RATES.female8hHourly,
         ...rows.map((row) => Number(row.female_8h_hourly)),
       ],
+      positionRates: await loadPositionRates(),
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes('SUPABASE_SERVICE_ROLE_KEY')) {
